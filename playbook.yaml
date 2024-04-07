@@ -1,0 +1,77 @@
+- name: play
+  hosts: ec2
+  environment:
+    DOTFILES_FORCE: "true"
+  tasks:
+    - name: get dotfiles facts
+      action: 'dotfile_facts'
+
+    - name: checkout dotfiles
+      ansible.builtin.git:
+        repo: 'https://github.com/daler/dotfiles.git'
+        dest: '~/dotfiles'
+
+    - name: copy dotfiles
+      ansible.builtin.command: ~/dotfiles/setup.sh --dotfiles
+      when: not dotfiles
+
+    - name: install conda
+      ansible.builtin.command: ~/dotfiles/setup.sh --install-conda
+      when: not conda
+
+    - name: set up bioconda
+      ansible.builtin.command: ~/dotfiles/setup.sh --set-up-bioconda
+      when: not bioconda
+
+    - name: install ripgrep
+      ansible.builtin.command: ~/dotfiles/setup.sh --install-ripgrep
+      when: not rg
+
+    - name: install vd
+      ansible.builtin.command: ~/dotfiles/setup.sh --install-vd
+      when: not vd
+
+    - name: install fzf
+      ansible.builtin.command: ~/dotfiles/setup.sh --install-fzf
+      when: not fzf
+
+    - name: install nvim
+      ansible.builtin.command: ~/dotfiles/setup.sh --install-neovim
+      when: not nvim
+
+    - name: git config user
+      ansible.builtin.command: git config --global user.name "Ryan Dale"
+
+    - name: git config email
+      ansible.builtin.command: git config --global user.email "ryan.dale@nih.gov"
+
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: ~/.ssh
+        state: directory
+        mode: '0700'
+
+    - name: install nvim plugins
+      ansible.builtin.command: |
+        nvim +"lua require('lazy').restore({wait=true})" +q +q
+
+    - name: apt installs
+      become: true
+      ansible.builtin.apt:
+        update_cache: true
+        pkg:
+          - build-essential
+          - curl
+          - docker.io
+          - git
+          - htop
+          - iotop
+          - podman
+          - rsync
+          - tmux
+          - wget
+
+    - name: apt upgrade
+      become: true
+      ansible.builtin.apt:
+        upgrade: true
