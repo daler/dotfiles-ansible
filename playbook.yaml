@@ -38,21 +38,19 @@
     - name: install npm
       ansible.builtin.command: ~/dotfiles/setup.sh --install-npm
       when: not npm
+
     - name: install nvim
       ansible.builtin.command: ~/dotfiles/setup.sh --install-neovim
       when: not nvim
 
-    - name: git config user
-      ansible.builtin.command: git config --global user.name "Ryan Dale"
-
-    - name: git config email
-      ansible.builtin.command: git config --global user.email "ryan.dale@nih.gov"
-
-    - name: Create a directory if it does not exist
-      ansible.builtin.file:
-        path: ~/.ssh
-        state: directory
-        mode: '0700'
+    - name: git config
+      ansible.builtin.blockinfile:
+        path: ~/.gitconfig
+        insertafter: diff3
+        block: |
+          [user]
+          	name = Ryan Dale
+          	email = ryan.dale@nih.gov
 
     - name: install nvim plugins
       ansible.builtin.command: |
