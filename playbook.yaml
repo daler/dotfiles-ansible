@@ -55,6 +55,7 @@
     - name: install nvim plugins
       ansible.builtin.command: |
         nvim +"lua require('lazy').restore({wait=true})" +q +q
+      when: not lazy
 
     - name: apt installs
       become: true
