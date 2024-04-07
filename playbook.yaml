@@ -35,6 +35,9 @@
       ansible.builtin.command: ~/dotfiles/setup.sh --install-fzf
       when: not fzf
 
+    - name: install npm
+      ansible.builtin.command: ~/dotfiles/setup.sh --install-npm
+      when: not npm
     - name: install nvim
       ansible.builtin.command: ~/dotfiles/setup.sh --install-neovim
       when: not nvim
