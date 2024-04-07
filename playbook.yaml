@@ -57,6 +57,12 @@
         nvim +"lua require('lazy').restore({wait=true})" +q +q
       when: not lazy
 
+    - name: install lsps
+      ansible.builtin.shell:
+        cmd: ca && nvim --headless  +"MasonInstall pyright black shfmt bash-language-server isort" +q
+        executable: /bin/bash
+      when: not mason
+
     - name: apt installs
       become: true
       ansible.builtin.apt:
