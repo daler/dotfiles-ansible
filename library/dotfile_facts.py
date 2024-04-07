@@ -60,6 +60,8 @@ def run_module():
         'bioconda-recipes': pathexists('~/proj/bioconda-recipes'),
         'bioconda-docs': pathexists('~/proj/bioconda-docs'),
         'bioconda-utils': pathexists('~/proj/bioconda-utils'),
+        'mason': pathexists('~/.local/share/nvim/mason'),
+        'lazy': pathexists('~/.local/share/nvim/lazy'),
     }
 
     result['ansible_facts'] = facts
