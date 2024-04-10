@@ -83,3 +83,15 @@
       become: true
       ansible.builtin.apt:
         upgrade: true
+
+    - name: Create "docker" group
+      become: true
+      group:
+        name: "docker"
+        state: present
+
+    - name: Add remote "ubuntu" user to "docker" group
+      become: true
+      user:
+        name: "ubuntu"
+        group: "docker"
