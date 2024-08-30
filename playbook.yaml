@@ -43,15 +43,6 @@
       ansible.builtin.command: ~/dotfiles/setup.sh --install-neovim
       when: not nvim
 
-    - name: git config
-      ansible.builtin.blockinfile:
-        path: ~/.gitconfig
-        insertafter: diff3
-        block: |
-          [user]
-          	name = Ryan Dale
-          	email = ryan.dale@nih.gov
-
     - name: install nvim plugins
       ansible.builtin.command: |
         nvim +"lua require('lazy').restore({wait=true})" +q +q
