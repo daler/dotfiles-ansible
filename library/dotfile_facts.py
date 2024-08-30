@@ -1,29 +1,35 @@
 #!/usr/bin/python
 
-from __future__ import (absolute_import, division, print_function)
+# Modified from https://docs.ansible.com/ansible/latest/dev_guide/developing_modules_general.html
+
+from __future__ import absolute_import, division, print_function
 from pathlib import Path
 import subprocess as sp
 
 __metaclass__ = type
 
-DOCUMENTATION = r'''
-'''
+DOCUMENTATION = r"""
+Check for existence of various programs installable via dotfiles/setup.sh, and
+provide that information as facts that Ansible can operate on.
+"""
 
-EXAMPLES = r'''
-'''
+EXAMPLES = r"""
+"""
 
-RETURN = r'''
-'''
+RETURN = r"""
+"""
 
 from ansible.module_utils.basic import AnsibleModule
 
 
 def exists(program):
-    p = sp.run(f'which {program}', shell=True)
+    p = sp.run(f"which {program}", shell=True)
     return p.returncode == 0
+
 
 def pathexists(path):
     return Path(path).expanduser().exists()
+
 
 def run_module():
     module_args = dict()
@@ -32,42 +38,35 @@ def run_module():
         changed=False,
     )
 
-    module = AnsibleModule(
-        argument_spec=module_args,
-        supports_check_mode=True
-    )
+    module = AnsibleModule(argument_spec=module_args, supports_check_mode=True)
 
     if module.check_mode:
         module.exit_json(**result)
 
-    if not Path('~/.condarc').expanduser().exists():
+    if not Path("~/.condarc").expanduser().exists():
         bioconda = False
     else:
-        bioconda = 'bioconda' in open(Path('~/.condarc').expanduser()).read()
+        bioconda = "bioconda" in open(Path("~/.condarc").expanduser()).read()
 
-    # manipulate or modify the state as needed (this is going to be the
-    # part where your module will do what it needs to do)
     facts = {
-        'vd': exists('vd'),
-        'rg': exists('rg'),
-        'conda': exists('conda'),
-        'fd': exists('fd'),
-        'nvim': exists('nvim'),
-        'fzf': exists('fzf'),
-        'npm': exists('npm'),
-        'dotfiles': Path('~/.config/nvim/init.lua').expanduser().exists(),
-        'bioconda': bioconda,
-        'bioconda-recipes': pathexists('~/proj/bioconda-recipes'),
-        'bioconda-docs': pathexists('~/proj/bioconda-docs'),
-        'bioconda-utils': pathexists('~/proj/bioconda-utils'),
-        'mason': pathexists('~/.local/share/nvim/mason'),
-        'lazy': pathexists('~/.local/share/nvim/lazy'),
+        "vd": exists("vd"),
+        "rg": exists("rg"),
+        "conda": exists("conda"),
+        "fd": exists("fd"),
+        "nvim": exists("nvim"),
+        "fzf": exists("fzf"),
+        "npm": exists("npm"),
+        "dotfiles": Path("~/.config/nvim/init.lua").expanduser().exists(),
+        "bioconda": bioconda,
+        "bioconda-recipes": pathexists("~/proj/bioconda-recipes"),
+        "bioconda-docs": pathexists("~/proj/bioconda-docs"),
+        "bioconda-utils": pathexists("~/proj/bioconda-utils"),
+        "mason": pathexists("~/.local/share/nvim/mason"),
+        "lazy": pathexists("~/.local/share/nvim/lazy"),
     }
 
-    result['ansible_facts'] = facts
+    result["ansible_facts"] = facts
 
-    # in the event of a successful module execution, you will want to
-    # simple AnsibleModule.exit_json(), passing the key/value results
     module.exit_json(**result)
 
 
@@ -75,5 +74,5 @@ def main():
     run_module()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
