@@ -31,6 +31,10 @@
       ansible.builtin.command: ~/dotfiles/setup.sh --install-vd
       when: not vd
 
+    - name: install fd
+      ansible.builtin.command: ~/dotfiles/setup.sh --install-fd
+      when: not fd
+
     - name: install fzf
       ansible.builtin.command: ~/dotfiles/setup.sh --install-fzf
       when: not fzf
