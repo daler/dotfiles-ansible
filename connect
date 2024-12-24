@@ -1,0 +1,4 @@
+#!/bin/bash
+
+[ -z "$EC2_PEM" ] && echo 'Missing $EC2_PEM' && exit 1
+ssh ubuntu@$(grep -v ec2 hosts) -i $EC2_PEM
