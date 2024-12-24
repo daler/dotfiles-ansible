@@ -70,6 +70,7 @@
           - htop
           - iotop
           - podman
+          - python3-paramiko  # for configuring .ssh/config
           - rsync
           - tmux
           - unzip
@@ -91,3 +92,12 @@
       user:
         name: "ubuntu"
         group: "docker"
+
+    # From https://docs.github.com/en/authentication/troubleshooting-ssh/using-ssh-over-the-https-port:
+    - name: Add GitHub SSH-over-HTTPS to .ssh/config
+      community.general.ssh_config:
+        user: ubuntu
+        remote_user: git
+        hostname: ssh.github.com
+        port: '443'
+        host: github.com
