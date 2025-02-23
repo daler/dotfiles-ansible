@@ -1,39 +1,111 @@
 # dotfiles with ansible
 
-Sets up [daler/dotfiles](https://github.com/daler/dotfiles) on a remote host. Tested and used on AWS Ubuntu 22, but
-the ideas should be valid for other hosts with some modification.
+- Use terraform to set up an instance (optional; you can use AWS Console instead)
+- Use ansible to set up [daler/dotfiles](https://github.com/daler/dotfiles) on a remote host.
 
-Uses a [custom ansible module](library/dotfile_facts.py) to provide facts about dotfiles installation on
-the remote host.
+Tested and used on AWS Ubuntu, but the ideas should be valid for other hosts
+with modification.
 
-## Usage
+Uses a [custom ansible module](library/dotfile_facts.py) to provide facts about
+dotfiles installation on the remote host.
+
+## Env var assumptions
+
+The following environment variables are assumed to be available:
+
+| env var                    | description                                                                             |
+|----------------------------|-----------------------------------------------------------------------------------------|
+| TF_VAR_EC2_LOGIN_KEY       | .pem file (if instance created in console), or existing private key file (if terraform) |
+| TF_VAR_EC2_INSTALL_SSH_KEY | SSH key to be copied over to instance to enable e.g. github access                      |
+| AWS_ACCESS_KEY_ID          | From AWS console                                                                        |
+| AWS_SECRET_ACCESS_KEY      | From AWS console                                                                        |
+
+
+## Host creation (manual)
 
 - In AWS Console, start a new AWS instance running Ubuntu 24.04 LTS
-- Once running, add public IP from AWS Console to `hosts` file
-- `./run-playbook.sh` to set everything up
-  - Expects `EC2_PEM` env var to be set, which is the .pem file used when setting up the instance.
+- Edit `hosts` file with public IP listed in AWS Console
+- Ensure `$TF_VAR_EC2_LOGIN_KEY` is set to the .pem file you used when creating
+  the instance, which is used by `./connect`.
 
-## Post-ansible setup
+## Host creation (terraform)
 
-Some specific setup when working on github repos and specifically bioconda:
+Assumptions:
 
-- Run `./copy-keys.sh` to copy over ssh keys from local machine to instance. Expects the following env vars:
-  - `EC2_PEM`: path to .pem file used when setting up instance
-  - `EC2_SSH_KEY`: path to private SSH key to be copied over (public will be copied over too)
-  - `EC2_FIRST_LAST`: quoted first and last name to be added to `~/.gitconfig`
-  - `EC2_EMAIL`: email to be added to `~/.gitconfig`
-- Run `scp set-up-bioconda.sh ubuntu@$(grep -v ec2):~/` to copy over setup script
-  (which needs ssh passphrase, so run this interactively on remote)
-  - `./connect`, then on remote, `./set-up-bioconda.sh`
+- You have installed terraform and aws-cli locally
+- You have run `terraform init` (this sets up aws provider, for example)
+- `aws configure` has been run with a default region
+- You have an existing volume with the tag `Name` with the value `devboxdata`,
+  which will be mounted at `/data` on the instance.
+- `terraform.tfvars` has been edited appropriately.
+- The following env vars are configured:
 
-## Before terminating
+| env var               | description      |
+|-----------------------|------------------|
+| AWS_ACCESS_KEY_ID     | From AWS console |
+| AWS_SECRET_ACCESS_KEY | From AWS console |
 
-Of course it depends on what you were doing, but may need to copy stuff
-locally:
+Run the following:
 
 ```bash
-# copy back here when shutting down instance
-REMOTE="/home/ubuntu/proj/bioconda-utils"
-LOCAL="~/proj/bioconda-utils"
-rsync -avr -e "ssh -i $EC2_PEM" --exclude env ubuntu@$(grep -v ec2 hosts):$REMOTE $LOCAL
+terraform apply
 ```
+
+If all looks good, answer "yes". Provisioning takes 1-2 mins.
+
+## Ansible setup
+
+Run the following:
+
+```bash
+`./run-playbook.sh`
+```
+
+This takes 2-3 mins.
+
+If you intend on doing e.g. GitHub development work, you can optionally copy
+over a local SSH key (that has been added to GitHub), and set the remote
+`~/.gitconfig` to reflect your local copy. Specifically, the local values of
+`git config --get user.email` and `git config --get user.name` will be added to
+the remote `~/.gitconfig`.
+
+
+```bash
+# optional
+./copy-keys.sh
+```
+
+## Connecting
+
+Connect to the instance with:
+
+```bash
+./connect.sh
+```
+
+This reads the `hosts` file, which is populated by terraform or `./start` with
+the IP or must be manually updated if using AWS Console.
+
+It expects the env var`$TF_VAR_EC2_LOGIN_KEY`.
+
+## Stopping and (re)starting the instance
+
+Either use the AWS Console, or if you used terraform (and therefore you have an
+`.instance_id` file automatically created with the instance ID), then use:
+
+```bash
+# stops instance and waits until it's stopped before exiting
+./stop
+```
+
+and
+
+```bash
+# starts instance, waits until started, and updates./hosts file with new IP
+./start
+```
+
+These scripts use the contents of `.instance_id`, which are created by
+terraform. They will wait until the instance is started/stopped before exiting.
+They can be run multiple times; e.g. you can keep running `./start`
+until it reports "running". 
