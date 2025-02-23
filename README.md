@@ -24,7 +24,13 @@ The following environment variables are assumed to be available:
 ## Host creation (manual)
 
 - In AWS Console, start a new AWS instance running Ubuntu 24.04 LTS
-- Edit `hosts` file with public IP listed in AWS Console
+- Edit `hosts` file with public IP listed in AWS Console, to look like this:
+
+```
+[ec2]
+<IP address here>
+```
+
 - Ensure `$TF_VAR_EC2_LOGIN_KEY` is set to the .pem file you used when creating
   the instance, which is used by `./connect`.
 
