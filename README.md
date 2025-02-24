@@ -92,7 +92,7 @@ Connect to the instance with:
 This reads the `hosts` file, which is populated by terraform or `./start` with
 the IP or must be manually updated if using AWS Console.
 
-It expects the env var`$TF_VAR_EC2_LOGIN_KEY`.
+It expects the env var `$TF_VAR_EC2_LOGIN_KEY`.
 
 ## Stopping and (re)starting the instance
 
@@ -115,3 +115,20 @@ These scripts use the contents of `.instance_id`, which are created by
 terraform. They will wait until the instance is started/stopped before exiting.
 They can be run multiple times; e.g. you can keep running `./start`
 until it reports "running". 
+
+## Destroy
+
+To terminate the instance (and remove VPC and subnet), run:
+
+```bash
+terraform destroy
+```
+
+Note that this will NOT delete the persistent volume you set up previously (and
+which was attached to `/data` on the instance), but it **WILL delete everything
+in the root partition**. So upon starting a new instance, you'll need to re-run
+`./run-playbook` and `copy-keys` again.
+
+Recall that the stopped instance does not accumlate *running* charges, but it
+does accumlate *storage* charges. So the decision is, "do I want to destroy (and
+pay the ~5 mins setup time later) or keep it stopped and pay for instance storage?".
