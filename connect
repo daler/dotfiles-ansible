@@ -1,4 +1,4 @@
 #!/bin/bash
 
-[ -z "$EC2_PEM" ] && echo 'Missing $EC2_PEM' && exit 1
-ssh ubuntu@$(grep -v ec2 hosts) -i $EC2_PEM
+[ -z "$TF_VAR_EC2_LOGIN_KEY" ] && echo 'Missing $TF_VAR_EC2_LOGIN_KEY' && exit 1
+ssh ubuntu@$(grep -v ec2 hosts) -i $TF_VAR_EC2_LOGIN_KEY

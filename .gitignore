@@ -1,1 +1,7 @@
 env/
+terraform.tfstate
+terraform.tfstate.backup
+.instance_id
+.terraform/
+.terraform.lock.hcl
+hosts

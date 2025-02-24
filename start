@@ -1,0 +1,13 @@
+#!/bin/bash
+ID=$(cat .instance_id)
+aws ec2 start-instances --instance-ids $ID
+echo "Waiting until $ID is running..." 1>&2
+aws ec2 wait instance-running --instance-ids $ID
+IP=$(
+  aws ec2 describe-instances \
+    --instance-ids $ID \
+    --query 'Reservations[*].Instances[*].PublicIpAddress' \
+    --output text
+)
+echo -e "[ec2]\n$IP" > "./hosts"
+echo "$ID started; 'hosts' file updated with IP=$IP" 1>&2
