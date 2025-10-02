@@ -111,9 +111,26 @@
 
     # From https://docs.github.com/en/authentication/troubleshooting-ssh/using-ssh-over-the-https-port:
     - name: Add GitHub SSH-over-HTTPS to .ssh/config
+      become: true
       community.general.ssh_config:
         user: ubuntu
         remote_user: git
         hostname: ssh.github.com
         port: '443'
         host: github.com
+
+    - name: Uncomment AllowAgentForwarding in sshd_config
+      become: true
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?\s*AllowAgentForwarding'
+        line: 'AllowAgentForwarding yes'
+        state: present
+      notify: Restart sshd
+
+  handlers:
+    - name: Restart sshd
+      become: true
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
