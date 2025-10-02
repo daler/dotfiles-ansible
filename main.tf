@@ -9,7 +9,6 @@ terraform {
 }
 variable "region" { type = string }
 variable "ssh_key_file" { type = string }
-variable "ami" { type = string }
 variable "instance_type" { type = string }
 variable "volume_name" { type = string }
 variable "EC2_LOGIN_KEY" { type = string }
@@ -23,6 +22,22 @@ resource "aws_key_pair" "ssh_key" {
   key_name   = "ssh-key"
   public_key = file("${var.EC2_LOGIN_KEY}.pub")
 }
+
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]  # Canonical's AWS account
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-*-amd64-server-*"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
 
 # Create VPC, public subnet, and gateway so we can ssh in
 resource "aws_vpc" "main" {
@@ -88,7 +103,7 @@ resource "aws_security_group" "allow_ssh" {
 }
 
 resource "aws_instance" "devbox" {
-  ami           = var.ami
+  ami           = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
   key_name      = aws_key_pair.ssh_key.key_name
 
@@ -153,3 +168,4 @@ resource "local_file" "hosts" {
   filename = "${path.module}/hosts"
 }
 
+# vim: ft=hcl
