@@ -93,6 +93,22 @@
         name: "ubuntu"
         group: "docker"
 
+    - name: Get local username
+      delegate_to: localhost
+      ansible.builtin.command: git config --get user.name
+      register: local_git_user
+
+    - name: Get local email
+      delegate_to: localhost
+      ansible.builtin.command: git config --get user.email
+      register: local_git_email
+
+    - name: Set git config on remote
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - git config --global user.name "{{ local_git_user.stdout }}"
+        - git config --global user.email "{{ local_git_email.stdout }}"
+
     # From https://docs.github.com/en/authentication/troubleshooting-ssh/using-ssh-over-the-https-port:
     - name: Add GitHub SSH-over-HTTPS to .ssh/config
       community.general.ssh_config:
