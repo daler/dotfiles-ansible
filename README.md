@@ -1,29 +1,80 @@
 # dotfiles with ansible
 
-- Use terraform to set up an instance (optional; you can use AWS Console instead)
+## Overview
+
+Start and configure a development box as seamlessly and as quickly as possible.
+
+- Use terraform to set up an AWS instance (optional; you can use AWS Console instead)
 - Use ansible to set up [daler/dotfiles](https://github.com/daler/dotfiles) on a remote host.
+  - Uses a [custom ansible module](library/dotfile_facts.py) to provide facts
+    about dotfiles installation on the remote host.
+- Scripts to easily connect, start, and stop the instance.
 
 Tested and used on AWS Ubuntu, but the ideas should be valid for other hosts
 with modification.
 
-Uses a [custom ansible module](library/dotfile_facts.py) to provide facts about
-dotfiles installation on the remote host.
+**TL;DR:**
+
+
+| command             | description                                           |
+|---------------------|-------------------------------------------------------|
+| `./start`           | Starts the instance if it was stopped                 |
+| `terraform apply`   | Build infrastructure, attach devbox storage. 1-2 mins |
+| `./run-playbook.sh` | Install conda, dotfiles, and more. ~3 mins            |
+| `./connect`         | Connect to host                                       |
+| `./stop`            | Stop instance                                         |
+| `terraform destroy` | Tear down infra EXCEPT storage                        |
+
+
+Connect, and go to /data for the mounted volume.
 
 ## Env var assumptions
 
 The following environment variables are assumed to be available:
 
-| env var                    | description                                                                             |
-|----------------------------|-----------------------------------------------------------------------------------------|
-| TF_VAR_EC2_LOGIN_KEY       | .pem file (if instance created in console), or existing private key file (if terraform) |
-| TF_VAR_EC2_INSTALL_SSH_KEY | SSH key to be copied over to instance to enable e.g. github access                      |
-| AWS_ACCESS_KEY_ID          | From AWS console                                                                        |
-| AWS_SECRET_ACCESS_KEY      | From AWS console                                                                        |
+| env var               | description                                                                             |
+|-----------------------|-----------------------------------------------------------------------------------------|
+| TF_VAR_EC2_LOGIN_KEY  | .pem file (if instance created in console), or existing private key file (if terraform) |
+| AWS_ACCESS_KEY_ID     | From AWS console                                                                        |
+| AWS_SECRET_ACCESS_KEY | From AWS console                                                                        |
 
+
+## Host creation (terraform)
+
+One-time setup:
+
+- terraform and aws-cli installed locally
+- `terraform init` (this sets up aws provider, for example)
+- `aws configure` has been run with a default region
+- You have an existing volume with the tag `Name` with the value `devboxdata`,
+  which will be mounted at `/data` on the instance.
+- `terraform.tfvars` has been edited appropriately.
+
+
+Run the following:
+
+```bash
+terraform apply
+```
+If all looks good, answer "yes". Provisioning takes 1-2 mins.
+
+It will do the following:
+
+- Creates a VPC with public subnet, internet gateway, and route table for internet access
+- Allows SSH access (port 22) from anywhere
+- Uploads public key to AWS for instance access
+- Ubuntu server with auto-mounting script for the persistent volume
+- Attaches existing `devboxdata` EBS volume to `/data`
+- Creates `hosts` file for Ansible and `.instance_id` for start/stop scripts
 
 ## Host creation (manual)
 
-- In AWS Console, start a new AWS instance running Ubuntu 24.04 LTS
+<details>
+<summary>Click to expand manual host creation instructions</summary>
+
+If you don't want to use terraform, start an instance manually:
+
+- In AWS Console, start a new AWS instance running Ubuntu 24.04 LTS. Make sure to mount `devbox`.
 - Edit `hosts` file with public IP listed in AWS Console, to look like this:
 
 ```
@@ -31,33 +82,12 @@ The following environment variables are assumed to be available:
 <IP address here>
 ```
 
-- Ensure `$TF_VAR_EC2_LOGIN_KEY` is set to the .pem file you used when creating
-  the instance, which is used by `./connect`.
+When creating the instance, ensure `$TF_VAR_EC2_LOGIN_KEY` is set to the .pem
+file you use, because the file indicated by that env var is used by
+`./connect`.
 
-## Host creation (terraform)
+</details>
 
-Assumptions:
-
-- You have installed terraform and aws-cli locally
-- You have run `terraform init` (this sets up aws provider, for example)
-- `aws configure` has been run with a default region
-- You have an existing volume with the tag `Name` with the value `devboxdata`,
-  which will be mounted at `/data` on the instance.
-- `terraform.tfvars` has been edited appropriately.
-- The following env vars are configured:
-
-| env var               | description      |
-|-----------------------|------------------|
-| AWS_ACCESS_KEY_ID     | From AWS console |
-| AWS_SECRET_ACCESS_KEY | From AWS console |
-
-Run the following:
-
-```bash
-terraform apply
-```
-
-If all looks good, answer "yes". Provisioning takes 1-2 mins.
 
 ## Ansible setup
 
@@ -69,16 +99,17 @@ Run the following:
 
 This takes 2-3 mins.
 
-If you intend on doing e.g. GitHub development work, you can optionally copy
-over a local SSH key (that has been added to GitHub), and set the remote
-`~/.gitconfig` to reflect your local copy. Specifically, the local values of
-`git config --get user.email` and `git config --get user.name` will be added to
-the remote `~/.gitconfig`.
+If you intend on doing GitHub development work and don't want to create new
+keys each time, you can optionally copy over a local SSH key (that has been
+added to GitHub), and configure the remote `~/.gitconfig` to reflect your local
+copy. Specifically, the local values of `git config --get user.email` and `git
+config --get user.name` will be added to the remote `~/.gitconfig`.
 
 
 ```bash
-# optional
+# Adds local user name and email to remote .gitconfig
 ./copy-keys.sh
+
 ```
 
 ## Connecting
@@ -90,7 +121,7 @@ Connect to the instance with:
 ```
 
 This reads the `hosts` file, which is populated by terraform or `./start` with
-the IP or must be manually updated if using AWS Console.
+the IP, or was manually updated if using AWS Console instead of terraform.
 
 It expects the env var `$TF_VAR_EC2_LOGIN_KEY`.
 
