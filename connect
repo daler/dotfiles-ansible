@@ -1,4 +1,10 @@
 #!/bin/bash
 
 [ -z "$TF_VAR_EC2_LOGIN_KEY" ] && echo 'Missing $TF_VAR_EC2_LOGIN_KEY' && exit 1
+
+if [ -z "$SSH_AUTH_SOCK" ] || ! ssh-add -l &> /dev/null; then
+    echo "SSH agent not running"
+    exit 1
+fi
+
 ssh ubuntu@$(grep -v ec2 hosts) -i $TF_VAR_EC2_LOGIN_KEY -o ForwardAgent=yes
