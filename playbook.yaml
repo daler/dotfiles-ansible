@@ -136,6 +136,13 @@
         state: present
       notify: Restart sshd
 
+    - name: Configure bash prompt
+      ansible.builtin.copy:
+        dest: ~/.bash_prompt
+        content: |
+          export PS1="\u@\[\033[1;38;5;133m\]\h\[\033[0m\]:\w\$ "
+        mode: '0644'
+
   handlers:
     - name: Restart sshd
       become: true
