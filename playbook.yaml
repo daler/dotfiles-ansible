@@ -71,6 +71,7 @@
       ansible.builtin.apt:
         update_cache: true
         pkg:
+          - btop
           - build-essential
           - curl
           - docker.io
@@ -81,6 +82,7 @@
           - python3-paramiko  # for configuring .ssh/config
           - rsync
           - tmux
+          - tree
           - unzip
           - wget
 
