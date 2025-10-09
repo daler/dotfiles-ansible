@@ -15,8 +15,16 @@
       ansible.builtin.command: ~/dotfiles/setup.sh --dotfiles
       when: not dotfiles
 
+    - name: if conda is already installed, ensure it's on the path
+      ansible.builtin.lineinfile:
+        path: "~/.path"
+        line: 'export PATH="/data/miniforge/condabin:$PATH"'
+        state: present
+
     - name: install conda
-      ansible.builtin.command: ~/dotfiles/setup.sh --install-conda
+      ansible.builtin.shell:
+        cmd: CONDA_INSTALLATION_DIR=/data/miniforge ~/dotfiles/setup.sh --install-conda
+        executable: /bin/bash
       when: not conda
 
     - name: set up bioconda

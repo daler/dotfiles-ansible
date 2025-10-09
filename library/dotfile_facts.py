@@ -23,7 +23,7 @@ from ansible.module_utils.basic import AnsibleModule
 
 
 def exists(program):
-    p = sp.run(f"which {program}", shell=True)
+    p = sp.run(f"which {program}", shell=True, check=False)
     return p.returncode == 0
 
 
@@ -51,7 +51,7 @@ def run_module():
     facts = {
         "vd": exists("vd"),
         "rg": exists("rg"),
-        "conda": exists("conda"),
+        "conda": exists("conda") or pathexists("/data/miniforge/bin"),
         "fd": exists("fd"),
         "nvim": exists("nvim"),
         "fzf": exists("fzf"),
