@@ -26,7 +26,7 @@ with modification.
 | `terraform destroy` | Tear down infra EXCEPT storage                        |
 
 
-Connect, and go to /data for the mounted volume.
+Connect, and go to `/data` for the mounted volume.
 
 ## Env var assumptions
 
@@ -39,17 +39,26 @@ The following environment variables are assumed to be available:
 | AWS_SECRET_ACCESS_KEY | From AWS console                                                                        |
 
 
-## Host creation (terraform)
+## One-time setup
 
-One-time setup:
+The following needs to be done once; after this you can create/destroy the
+infrastructure and redeploy many times.
 
-- terraform and aws-cli installed locally
-- `terraform init` (this sets up aws provider, for example)
-- `aws configure` has been run with a default region
-- You have an existing volume with the tag `Name` with the value `devboxdata`,
-  which will be mounted at `/data` on the instance.
-- `terraform.tfvars` has been edited appropriately.
+- [Install terraform](https://developer.hashicorp.com/terraform/install) locally.
+- [Install aws-cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) locally.
+- Create a keypair in `~/.ssh/aws` (e.g., `ssh-keygen -f ~/.ssh/aws`) that will
+  be configured for use with any new instances.
+- Run `terraform init` (this sets up AWS provider, for example).
+- Run `aws configure` to get a default region.
+- Create an EBS volume (or tag an existing one) with the tag `Name` and the
+  value `devboxdata`, which will be mounted at `/data` on a new instance. (Edit
+  `terraform.tfvars` if you want a different name).
+  (Create this volume through the AWS console, it keeps it away from terraform
+  to reduce the risk of `terraform destroy` affecting it).
+- Review and edit `terraform.tfvars`.
 
+
+## Infrastructure provisioning
 
 Run the following:
 
@@ -62,10 +71,11 @@ It will do the following:
 
 - Creates a VPC with public subnet, internet gateway, and route table for internet access
 - Allows SSH access (port 22) from anywhere
-- Uploads public key to AWS for instance access
-- Ubuntu server with auto-mounting script for the persistent volume
+- Uploads `~/.ssh/aws.pub` public key to AWS for instance access
+- Creates Ubuntu server using the latest HVM SSD AMD64 image, with auto-mounting script for the persistent volume
 - Attaches existing `devboxdata` EBS volume to `/data`
-- Creates `hosts` file for Ansible and `.instance_id` for start/stop scripts
+- Creates `hosts` file with the public IP for use with Ansible (below) and keep
+  track of instance ID in `.instance_id` for start/stop scripts
 
 ## Host creation (manual)
 
@@ -99,18 +109,20 @@ Run the following:
 
 This takes 2-3 mins.
 
-If you intend on doing GitHub development work and don't want to create new
-keys each time, you can optionally copy over a local SSH key (that has been
-added to GitHub), and configure the remote `~/.gitconfig` to reflect your local
-copy. Specifically, the local values of `git config --get user.email` and `git
-config --get user.name` will be added to the remote `~/.gitconfig`.
+This does the following:
 
+- installs conda to `/data/miniforge`
+- sets up bioconda channel
+- installs various tools in [daler/dotfiles](https://github.com/daler/dotfiles):  `fd`, `rg`, `vd`, `fzf`, `npm`, `nvim`
+- installs LSPs and plugins for `nvim`
+- installs various tools from Ubuntu repository (docker, podman, htop, tmux, and more -- see `playbook.yaml` for the full set)
+- Docker setup (add ubuntu user to docker group)
+- Match `~/.gitconfig` username and email with what is found locally
+- Add support for [GitHub SSH-over-HTTPS](https://docs.github.com/en/authentication/troubleshooting-ssh/using-ssh-over-the-https-port)
+- Color bash prompt (so it's clear you're on a different host)
+- Enable SSH key forwarding so you don't have to copy key files over to the
+  host
 
-```bash
-# Adds local user name and email to remote .gitconfig
-./copy-keys.sh
-
-```
 
 ## Connecting
 
@@ -123,7 +135,8 @@ Connect to the instance with:
 This reads the `hosts` file, which is populated by terraform or `./start` with
 the IP, or was manually updated if using AWS Console instead of terraform.
 
-It expects the env var `$TF_VAR_EC2_LOGIN_KEY`.
+It expects the env var `$TF_VAR_EC2_LOGIN_KEY` to exist -- this is `~/.ssh/aws`
+by default as described above.
 
 ## Stopping and (re)starting the instance
 
@@ -147,6 +160,16 @@ terraform. They will wait until the instance is started/stopped before exiting.
 They can be run multiple times; e.g. you can keep running `./start`
 until it reports "running". 
 
+## Copying files
+
+If you need to copy files from the remote instance to your local machine, you can use:
+
+```bash
+./copy-to-local <remote-file-path>
+```
+
+which will copy to the current directory.
+
 ## Destroy
 
 To terminate the instance (and remove VPC and subnet), run:
@@ -158,7 +181,7 @@ terraform destroy
 Note that this will NOT delete the persistent volume you set up previously (and
 which was attached to `/data` on the instance), but it **WILL delete everything
 in the root partition**. So upon starting a new instance, you'll need to re-run
-`./run-playbook` and `copy-keys` again.
+`./run-playbook` again.
 
 Recall that the stopped instance does not accumlate *running* charges, but it
 does accumlate *storage* charges. So the decision is, "do I want to destroy (and
