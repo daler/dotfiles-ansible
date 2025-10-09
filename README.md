@@ -104,7 +104,7 @@ file you use, because the file indicated by that env var is used by
 Run the following:
 
 ```bash
-`./run-playbook.sh`
+./run-playbook.sh
 ```
 
 This takes 2-3 mins.
