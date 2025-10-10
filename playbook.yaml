@@ -3,6 +3,31 @@
   environment:
     DOTFILES_FORCE: "true"
   tasks:
+    - name: apt upgrade
+      become: true
+      ansible.builtin.apt:
+        upgrade: true
+
+    - name: apt installs
+      become: true
+      ansible.builtin.apt:
+        update_cache: true
+        pkg:
+          - btop
+          - build-essential
+          - curl
+          - docker.io
+          - git
+          - htop
+          - iotop
+          - podman
+          - python3-paramiko  # for configuring .ssh/config
+          - rsync
+          - tmux
+          - tree
+          - unzip
+          - wget
+
     - name: get dotfiles facts
       action: 'dotfile_facts'
 
@@ -65,31 +90,6 @@
         cmd: ca && nvim --headless  +"MasonInstall pyright black shfmt bash-language-server isort" +q
         executable: /bin/bash
       when: not mason
-
-    - name: apt installs
-      become: true
-      ansible.builtin.apt:
-        update_cache: true
-        pkg:
-          - btop
-          - build-essential
-          - curl
-          - docker.io
-          - git
-          - htop
-          - iotop
-          - podman
-          - python3-paramiko  # for configuring .ssh/config
-          - rsync
-          - tmux
-          - tree
-          - unzip
-          - wget
-
-    - name: apt upgrade
-      become: true
-      ansible.builtin.apt:
-        upgrade: true
 
     - name: Create "docker" group
       become: true
