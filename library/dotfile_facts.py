@@ -31,6 +31,26 @@ def pathexists(path):
     return Path(path).expanduser().exists()
 
 
+def installed_but_needs_link(env_executable, link):
+    """
+    For example, if it was installed on persistent storage, but it's a fresh
+    instance where ~/opt/bin is not populated
+    """
+    if pathexists(env_executable) and not pathexists(link):
+        return True
+    return False
+
+
+def installed_but_not_on_path(env_dir, program):
+    """
+    Same as above, but looking for presence on PATH rather than a symlink in
+    ~/opt/bin
+    """
+    if pathexists(env_dir) and not exists(program):
+        return True
+    return False
+
+
 def run_module():
     module_args = dict()
 
@@ -52,7 +72,11 @@ def run_module():
         "vd": exists("vd"),
         "rg": exists("rg"),
         "conda": exists("conda") or pathexists("/data/miniforge/bin"),
-        "fd": exists("fd"),
+        "fd": exists("fd") and not installed_but_needs_link("/data/miniforge/envs/fd/bin/fd", "~/opt/bin/fd"),
+        "fd_needs_link": installed_but_needs_link("/data/miniforge/envs/fd/bin/fd", "~/opt/bin/fd"),
+        "vd_needs_link": installed_but_needs_link("/data/miniforge/envs/visidata/bin/fd", "~/opt/bin/vd"),
+        "npm_needs_path": installed_but_not_on_path("/data/miniforge/envs/npm/bin", "npm"),
+        "conda_needs_path": installed_but_not_on_path("/data/miniforge/condabin", "conda"),
         "nvim": exists("nvim"),
         "fzf": exists("fzf"),
         "npm": exists("npm"),

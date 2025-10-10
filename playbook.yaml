@@ -45,6 +45,14 @@
         path: "~/.path"
         line: 'export PATH="/data/miniforge/condabin:$PATH"'
         state: present
+      when: conda_needs_path
+
+    - name: ensure ~/opt/bin is on the path
+      ansible.builtin.lineinfile:
+        path: ~/.path
+        line: 'export PATH=$PATH:~/opt/bin'
+        create: yes
+        state: present
 
     - name: install conda
       ansible.builtin.shell:
@@ -55,6 +63,30 @@
     - name: set up bioconda
       ansible.builtin.command: ~/dotfiles/setup.sh --set-up-bioconda
       when: not bioconda
+
+    - name: symlink fd if env already exists on persistent volume
+      ansible.builtin.file:
+        src: /data/miniforge/envs/fd/bin/fd
+        dest: ~/opt/bin/fd
+        state: link
+      when: fd_needs_link
+
+    - name: symlink vd if env already exists on persistent volume
+      ansible.builtin.file:
+        src: /data/miniforge/envs/visidata/bin/vd
+        dest: ~/opt/bin/fd
+        state: link
+      when: vd_needs_link
+
+    # Instead of a symlink we want the entire directory on our PATH (if the
+     # directory exists)
+    - name: npm path in ~/.path
+      ansible.builtin.lineinfile:
+        path: ~/.path
+        line: 'export PATH=$PATH:/data/miniforge/envs/npm/bin'
+        create: yes
+        state: present
+      when: npm_needs_path
 
     - name: install ripgrep
       ansible.builtin.command: ~/dotfiles/setup.sh --install-ripgrep
