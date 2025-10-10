@@ -7,11 +7,17 @@ terraform {
   }
   required_version = ">= 1.2.0"
 }
+
 variable "region" { type = string }
 variable "ssh_key_file" { type = string }
 variable "instance_type" { type = string }
 variable "volume_name" { type = string }
+variable "notification_rate" { type = string }
+
+# These are expected to be environment variables with the TF_VAR_ prefix, e.g.,
+# TF_VAR_EC2_LOGIN_KEY and TF_VAR_NOTIFICATION_EMAIL
 variable "EC2_LOGIN_KEY" { type = string }
+variable "NOTIFICATION_EMAIL" { type = string }
 
 provider "aws" {
   region = var.region
@@ -37,7 +43,6 @@ data "aws_ami" "ubuntu" {
     values = ["available"]
   }
 }
-
 
 # Create VPC, public subnet, and gateway so we can ssh in
 resource "aws_vpc" "main" {
@@ -151,21 +156,120 @@ resource "aws_volume_attachment" "ebs_attachment" {
   instance_id = aws_instance.devbox.id
 }
 
+# ===== NOTIFICATION SYSTEM =====
+
+# SNS Topic for notifications
+resource "aws_sns_topic" "instance_alert" {
+  name = "instance-uptime-alert"
+}
+
+resource "aws_sns_topic_subscription" "email" {
+  topic_arn = aws_sns_topic.instance_alert.arn
+  protocol  = "email"
+  endpoint  = var.NOTIFICATION_EMAIL
+}
+
+# IAM Role for Lambda
+resource "aws_iam_role" "lambda_role" {
+  name = "lambda-instance-check-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "lambda_policy" {
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "sns:Publish",
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Lambda Function
+resource "aws_lambda_function" "check_instance" {
+  filename      = "lambda_function.zip"
+  function_name = "check-instance-uptime"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "index.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 30
+  source_code_hash = filebase64sha256("lambda_function.zip")
+
+  environment {
+    variables = {
+      INSTANCE_ID   = aws_instance.devbox.id
+      SNS_TOPIC_ARN = aws_sns_topic.instance_alert.arn
+    }
+  }
+}
+
+# EventBridge Rule - Every 6 hours
+resource "aws_cloudwatch_event_rule" "every_6_hours" {
+  name                = "check-instance-every-6-hours"
+  description         = "Trigger every 6 hours"
+  schedule_expression = var.notification_rate
+}
+
+resource "aws_cloudwatch_event_target" "lambda_target" {
+  rule      = aws_cloudwatch_event_rule.every_6_hours.name
+  target_id = "CheckInstanceLambda"
+  arn       = aws_lambda_function.check_instance.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.check_instance.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.every_6_hours.arn
+}
+
+# ===== OUTPUTS =====
+
 # Output the public IP so we can connect
 output "instance_public_ip" {
   value = aws_instance.devbox.public_ip
 }
 
+output "instance_id" {
+  value = aws_instance.devbox.id
+}
+
+output "sns_topic_arn" {
+  value = aws_sns_topic.instance_alert.arn
+}
+
 resource "local_file" "instance_id" {
-  content = "${aws_instance.devbox.id}"
+  content         = aws_instance.devbox.id
   file_permission = "0600"
-  filename = "${path.module}/.instance_id"
+  filename        = "${path.module}/.instance_id"
 }
 
 resource "local_file" "hosts" {
-  content = "[ec2]\n${aws_instance.devbox.public_ip}\n"
+  content         = "[ec2]\n${aws_instance.devbox.public_ip}\n"
   file_permission = "0600"
-  filename = "${path.module}/hosts"
+  filename        = "${path.module}/hosts"
 }
 
 # vim: ft=hcl
