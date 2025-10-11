@@ -112,6 +112,8 @@ means that Lambda will be running every N hours (every 6 hrs by default). This
 is inexpensive ($1 a month if running continously every 6 hrs for a month), but
 be aware.
 
+<details>
+<summary>Click to expand info on testing notifications</summary>
 For testing the notifications, you can *temporarily* set the rate to `rate(1
 minute)` in `terraform.tfvars`, re-apply, and check the logs with:
 
@@ -123,6 +125,7 @@ aws logs tail /aws/lambda/check-instance-uptime --follow
 If the instance is up, you're getting emails, and the log doesn't report
 errors, then set it back to some longer interval like `rate(6 hours)`, and
 re-apply with `terraform apply` so you're not running the Lambda so often.
+</details>
 
 Note: I looked into SMS messages instead of email, but that ends up being
 overly cumbersome and expensive (and requires getting approval from AWS and an
@@ -154,7 +157,7 @@ file you use, because the file indicated by that env var is used by
 Connect to the instance with:
 
 ```bash
-./connect.sh
+./connect
 ```
 
 This reads the `hosts` file, which is populated by terraform or `./start` with
