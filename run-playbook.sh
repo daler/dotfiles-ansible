@@ -9,6 +9,11 @@ case "$PROVIDER" in
         HOSTS_LIMIT="ec2"
         HOSTS_FILE="hosts-ec2"
         ;;
+    hetzner)
+        PROVIDER="hetzner"
+        HOSTS_LIMIT="hetzner"
+        HOSTS_FILE="hosts-hetzner"
+        ;;
     *)
         echo "Unknown provider: $PROVIDER"
         echo "Usage: $0 [aws|ec2|hetzner] [additional ansible-playbook options]"
