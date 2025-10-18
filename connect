@@ -1,5 +1,7 @@
 #!/bin/bash
 
+PROVIDER="${1:-aws}"
+
 [ -z "$TF_VAR_EC2_LOGIN_KEY" ] && echo 'Missing $TF_VAR_EC2_LOGIN_KEY' && exit 1
 
 if [ -z "$SSH_AUTH_SOCK" ] || ! ssh-add -l &> /dev/null; then
@@ -7,4 +9,25 @@ if [ -z "$SSH_AUTH_SOCK" ] || ! ssh-add -l &> /dev/null; then
     exit 1
 fi
 
-ssh ubuntu@$(grep -v ec2 hosts) -i $TF_VAR_EC2_LOGIN_KEY -o ForwardAgent=yes
+# Extract IP based on provider from hosts file
+case "$PROVIDER" in
+    aws|ec2)
+        HOSTS_FILE="hosts-ec2"
+        ;;
+    *)
+        echo "Unknown provider: $PROVIDER"
+        echo "Usage: $0 [aws|ec2|hetzner]"
+        exit 1
+        ;;
+esac
+
+# Extract first IP address from the provider-specific hosts file
+IP=$(awk '/^[0-9]/{print $1; exit}' "$HOSTS_FILE")
+
+if [ -z "$IP" ]; then
+    echo "No IP found for provider: $PROVIDER"
+    exit 1
+fi
+
+set -x
+ssh ubuntu@$IP -i $TF_VAR_EC2_LOGIN_KEY -o ForwardAgent=yes

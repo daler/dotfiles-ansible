@@ -1,4 +1,30 @@
 #!/bin/bash
 
+PROVIDER="${1:-aws}"
+
+# Validate provider
+case "$PROVIDER" in
+    aws|ec2)
+        PROVIDER="aws"
+        HOSTS_LIMIT="ec2"
+        HOSTS_FILE="hosts-ec2"
+        ;;
+    *)
+        echo "Unknown provider: $PROVIDER"
+        echo "Usage: $0 [aws|ec2|hetzner] [additional ansible-playbook options]"
+        exit 1
+        ;;
+esac
+
+shift  # Remove provider argument so remaining args can be passed to ansible-playbook
+
 [ -z $TF_VAR_EC2_LOGIN_KEY ] && echo 'Missing $TF_VAR_EC2_LOGIN_KEY (.pem file or SSH key prefix)' && exit 1
-ansible-playbook playbook.yaml -i hosts --private-key $TF_VAR_EC2_LOGIN_KEY -u ubuntu "$@"
+
+echo "Running playbook for provider: $PROVIDER"
+ansible-playbook playbook.yaml \
+    -i "$HOSTS_FILE" \
+    --limit "$HOSTS_LIMIT" \
+    --private-key $TF_VAR_EC2_LOGIN_KEY \
+    -u ubuntu \
+    -e "provider=$PROVIDER" \
+    "$@"

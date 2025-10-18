@@ -9,5 +9,5 @@ IP=$(
     --query 'Reservations[*].Instances[*].PublicIpAddress' \
     --output text
 )
-echo -e "[ec2]\n$IP" > "./hosts"
-echo "$ID started; 'hosts' file updated with IP=$IP" 1>&2
+echo -e "[ec2]\n$IP" > "./hosts-ec2"
+echo "$ID started; 'hosts-ec2' file updated with IP=$IP" 1>&2

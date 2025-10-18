@@ -266,10 +266,10 @@ resource "local_file" "instance_id" {
   filename        = "${path.module}/.instance_id"
 }
 
-resource "local_file" "hosts" {
+resource "local_file" "hosts_ec2" {
   content         = "[ec2]\n${aws_instance.devbox.public_ip}\n"
   file_permission = "0600"
-  filename        = "${path.module}/hosts"
+  filename        = "${path.module}/hosts-ec2"
 }
 
 # vim: ft=hcl
