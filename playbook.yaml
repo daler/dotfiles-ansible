@@ -1,181 +1,55 @@
-- name: play
-  hosts: ec2
+---
+# =============================================================================
+# Ansible Playbook for Server Setup
+# =============================================================================
+# This playbook configures servers on AWS (EC2) or Hetzner
+#
+# Usage:
+#   ./run-playbook.sh aws      # For AWS/EC2 instances
+#   ./run-playbook.sh hetzner  # For Hetzner instances
+#
+# The playbook is organized into modular task files for maintainability:
+#   - tasks/hetzner-root-setup.yaml  : Hetzner-specific volume & user setup
+#   - tasks/common-packages.yaml     : System packages (both providers)
+#   - tasks/common-dotfiles.yaml     : Dotfiles and git configuration
+#   - tasks/common-tools.yaml        : Development tools (conda, nvim, etc.)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Play 1: Hetzner Initial Setup (root user)
+# -----------------------------------------------------------------------------
+# This play only runs for Hetzner instances and must run as root.
+# It handles:
+#   - Mounting the persistent volume at /data
+#   - Creating the ubuntu user with sudo access
+#   - Copying SSH keys from root to ubuntu user
+# -----------------------------------------------------------------------------
+- name: Initial setup as root (Hetzner only)
+  hosts: hetzner
+  remote_user: root
+  tasks:
+    - name: Include Hetzner root setup tasks
+      ansible.builtin.include_tasks:
+        file: tasks/hetzner-root-setup.yaml
+
+# -----------------------------------------------------------------------------
+# Play 2: Main Setup (ubuntu user)
+# -----------------------------------------------------------------------------
+# This play runs for all hosts (both AWS and Hetzner) as the ubuntu user.
+# -----------------------------------------------------------------------------
+- name: Main setup tasks
+  hosts: all
+  remote_user: ubuntu
   environment:
     DOTFILES_FORCE: "true"
   tasks:
-    - name: apt upgrade
-      become: true
-      ansible.builtin.apt:
-        upgrade: true
+    - name: Include common package installation tasks
+      ansible.builtin.include_tasks:
+        file: tasks/common-packages.yaml
 
-    - name: apt installs
-      become: true
-      ansible.builtin.apt:
-        update_cache: true
-        pkg:
-          - btop
-          - build-essential
-          - curl
-          - docker.io
-          - git
-          - htop
-          - iotop
-          - podman
-          - python3-paramiko  # for configuring .ssh/config
-          - rsync
-          - tmux
-          - tree
-          - unzip
-          - wget
-
-    - name: get dotfiles facts
-      action: 'dotfile_facts'
-
-    - name: checkout dotfiles
-      ansible.builtin.git:
-        repo: 'https://github.com/daler/dotfiles.git'
-        dest: '~/dotfiles'
-
-    - name: copy dotfiles
-      ansible.builtin.command: ~/dotfiles/setup.sh --dotfiles
-      when: not dotfiles
-
-    - name: if conda is already installed, ensure it's on the path
-      ansible.builtin.lineinfile:
-        path: "~/.path"
-        line: 'export PATH="/data/miniforge/condabin:$PATH"'
-        state: present
-      when: conda_needs_path
-
-    - name: ensure ~/opt/bin is on the path
-      ansible.builtin.lineinfile:
-        path: ~/.path
-        line: 'export PATH=$PATH:~/opt/bin'
-        create: yes
-        state: present
-
-    - name: install conda
-      ansible.builtin.shell:
-        cmd: CONDA_INSTALLATION_DIR=/data/miniforge ~/dotfiles/setup.sh --install-conda
-        executable: /bin/bash
-      when: not conda
-
-    - name: set up bioconda
-      ansible.builtin.command: ~/dotfiles/setup.sh --set-up-bioconda
-      when: not bioconda
-
-    - name: symlink fd if env already exists on persistent volume
-      ansible.builtin.file:
-        src: /data/miniforge/envs/fd/bin/fd
-        dest: ~/opt/bin/fd
-        state: link
-      when: fd_needs_link
-
-    - name: symlink vd if env already exists on persistent volume
-      ansible.builtin.file:
-        src: /data/miniforge/envs/visidata/bin/vd
-        dest: ~/opt/bin/fd
-        state: link
-      when: vd_needs_link
-
-    # Instead of a symlink we want the entire directory on our PATH (if the
-     # directory exists)
-    - name: npm path in ~/.path
-      ansible.builtin.lineinfile:
-        path: ~/.path
-        line: 'export PATH=$PATH:/data/miniforge/envs/npm/bin'
-        create: yes
-        state: present
-      when: npm_needs_path
-
-    - name: install ripgrep
-      ansible.builtin.command: ~/dotfiles/setup.sh --install-ripgrep
-      when: not rg
-
-    - name: install vd
-      ansible.builtin.command: ~/dotfiles/setup.sh --install-vd
-      when: not vd
-
-    - name: install fd
-      ansible.builtin.command: ~/dotfiles/setup.sh --install-fd
-      when: not fd
-
-    - name: install fzf
-      ansible.builtin.command: ~/dotfiles/setup.sh --install-fzf
-      when: not fzf
-
-    - name: install npm
-      ansible.builtin.command: ~/dotfiles/setup.sh --install-npm
-      when: not npm
-
-    - name: install nvim
-      ansible.builtin.command: ~/dotfiles/setup.sh --install-neovim
-      when: not nvim
-
-    - name: install nvim plugins
-      ansible.builtin.command: |
-        nvim +"lua require('lazy').restore({wait=true})" +q +q
-      when: not lazy
-
-    - name: install lsps
-      ansible.builtin.shell:
-        cmd: ca && nvim --headless  +"MasonInstall pyright black shfmt bash-language-server isort" +q
-        executable: /bin/bash
-      when: not mason
-
-    - name: Create "docker" group
-      become: true
-      group:
-        name: "docker"
-        state: present
-
-    - name: Add remote "ubuntu" user to "docker" group
-      become: true
-      user:
-        name: "ubuntu"
-        group: "docker"
-
-    - name: Get local username
-      delegate_to: localhost
-      ansible.builtin.command: git config --get user.name
-      register: local_git_user
-
-    - name: Get local email
-      delegate_to: localhost
-      ansible.builtin.command: git config --get user.email
-      register: local_git_email
-
-    - name: Set git config on remote
-      ansible.builtin.command: "{{ item }}"
-      loop:
-        - git config --global user.name "{{ local_git_user.stdout }}"
-        - git config --global user.email "{{ local_git_email.stdout }}"
-
-    # From https://docs.github.com/en/authentication/troubleshooting-ssh/using-ssh-over-the-https-port:
-    - name: Add GitHub SSH-over-HTTPS to .ssh/config
-      become: true
-      community.general.ssh_config:
-        user: ubuntu
-        remote_user: git
-        hostname: ssh.github.com
-        port: '443'
-        host: github.com
-
-    - name: Uncomment AllowAgentForwarding in sshd_config
-      become: true
-      ansible.builtin.lineinfile:
-        path: /etc/ssh/sshd_config
-        regexp: '^#?\s*AllowAgentForwarding'
-        line: 'AllowAgentForwarding yes'
-        state: present
-      notify: Restart sshd
-
-    - name: Configure bash prompt
-      ansible.builtin.copy:
-        dest: ~/.bash_prompt
-        content: |
-          export PS1="\u@\[\033[1;38;5;133m\]\h\[\033[0m\]:\w\$ "
-        mode: '0644'
+    - name: Include common dotfiles setup tasks
+      ansible.builtin.include_tasks:
+        file: tasks/common-dotfiles.yaml
 
   handlers:
     - name: Restart sshd

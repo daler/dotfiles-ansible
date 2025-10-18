@@ -1,0 +1,50 @@
+---
+# Common package installation tasks
+- name: apt upgrade
+  become: true
+  ansible.builtin.apt:
+    upgrade: true
+
+- name: apt installs
+  become: true
+  ansible.builtin.apt:
+    update_cache: true
+    pkg:
+      - acl
+      - btop
+      - build-essential
+      - curl
+      - docker.io
+      - git
+      - htop
+      - iotop
+      - podman
+      - python3-paramiko
+      - rsync
+      - tmux
+      - tree
+      - unzip
+      - wget
+
+- name: Create "docker" group
+  become: true
+  group:
+    name: "docker"
+    state: present
+
+- name: Add ubuntu user to docker group
+  become: true
+  user:
+    name: "ubuntu"
+    groups:
+      - docker
+    append: yes
+
+- name: Uncomment AllowAgentForwarding in sshd_config
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*AllowAgentForwarding'
+    line: 'AllowAgentForwarding yes'
+    state: present
+  notify: Restart sshd
