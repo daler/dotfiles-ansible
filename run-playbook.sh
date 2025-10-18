@@ -8,11 +8,13 @@ case "$PROVIDER" in
         PROVIDER="aws"
         HOSTS_LIMIT="ec2"
         HOSTS_FILE="hosts-ec2"
+        SSH_USER="ubuntu"
         ;;
     hetzner)
         PROVIDER="hetzner"
         HOSTS_LIMIT="hetzner"
         HOSTS_FILE="hosts-hetzner"
+        SSH_USER="root"
         ;;
     *)
         echo "Unknown provider: $PROVIDER"
@@ -25,11 +27,11 @@ shift  # Remove provider argument so remaining args can be passed to ansible-pla
 
 [ -z $TF_VAR_EC2_LOGIN_KEY ] && echo 'Missing $TF_VAR_EC2_LOGIN_KEY (.pem file or SSH key prefix)' && exit 1
 
-echo "Running playbook for provider: $PROVIDER"
+echo "Running playbook for provider: $PROVIDER (user: $SSH_USER)"
 ansible-playbook playbook.yaml \
     -i "$HOSTS_FILE" \
     --limit "$HOSTS_LIMIT" \
     --private-key $TF_VAR_EC2_LOGIN_KEY \
-    -u ubuntu \
+    -u "$SSH_USER" \
     -e "provider=$PROVIDER" \
     "$@"
