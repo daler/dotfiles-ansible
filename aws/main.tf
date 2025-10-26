@@ -212,7 +212,7 @@ resource "aws_lambda_function" "check_instance" {
   function_name = "check-instance-uptime"
   role          = aws_iam_role.lambda_role.arn
   handler       = "index.lambda_handler"
-  runtime       = "python3.9"
+  runtime       = "python3.10"
   timeout       = 30
   source_code_hash = filebase64sha256("lambda_function.zip")
 
@@ -266,8 +266,8 @@ resource "local_file" "instance_id" {
   filename        = "${path.module}/.instance_id"
 }
 
-resource "local_file" "hosts" {
-  content         = "[ec2]\n${aws_instance.devbox.public_ip}\n"
+resource "local_file" "hosts_ec2" {
+  content         = "[aws]\n${aws_instance.devbox.public_ip}\n"
   file_permission = "0600"
   filename        = "${path.module}/hosts"
 }

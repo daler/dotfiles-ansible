@@ -2,104 +2,167 @@
 
 ## Overview
 
-Start and configure a development box as seamlessly and as quickly as possible.
+The goal of this repo is to start and configure a development box as seamlessly
+and as quickly as possible.
 
-- Use terraform to set up an AWS instance (optional; you can use AWS Console instead)
-- Use ansible to set up [daler/dotfiles](https://github.com/daler/dotfiles) on a remote host.
-- Scripts to easily connect, start, and stop the instance.
+This uses *terraform* to manage infrastructure (server and associated things like
+firewalls) and *ansible* to manage configuration of the server once it's created.
 
-Tested and used on AWS Ubuntu, but the ideas should be valid for other hosts
-with modification.
+There are two options for providers here, **AWS** and **Hetzner**.
 
-**TL;DR:**
+**AWS** lets you start/stop instances so that you don't pay for compute on stopped
+instances. You do pay for storage of the image, but that's a tiny fraction of
+the compute cost. This is a good option if you plan to have long periods of
+inactivity but want to keep the instance available (it usually takes less than
+a minute to start a stopped instance).
 
+**Hetzner** servers are about 10x cheaper than AWS for a month of compute. But
+you cannot start/stop them, you need to create/destroy the server completely.
+This is a good option if you know you will be using it fairly frequently.
 
-| command             | description                                           |
-|---------------------|-------------------------------------------------------|
-| `./start`           | Starts the instance if it was stopped                 |
-| `terraform apply`   | Build infrastructure, attach devbox storage. 1-2 mins |
-| `./connect`         | Connect to host                                       |
-| `./run-playbook.sh` | Install conda, dotfiles, and more. ~3 mins            |
-| `./stop`            | Stop instance                                         |
-| `terraform destroy` | Tear down infra EXCEPT storage                        |
-
-
-Connect, and go to `/data` for the mounted volume.
-
-## Env var assumptions
-
-The following environment variables are assumed to be available:
-
-| env var                   | description                                                                             |
-|---------------------------|-----------------------------------------------------------------------------------------|
-| TF_VAR_EC2_LOGIN_KEY      | .pem file (if instance created in console), or existing private key file (if terraform) |
-| TF_VAR_NOTIFICATION_EMAIL | email for notifications on instance                                                     |
-| AWS_ACCESS_KEY_ID         | From AWS console                                                                        |
-| AWS_SECRET_ACCESS_KEY     | From AWS console                                                                        |
-
-
-## One-time setup
-
-The following needs to be done once; after this you can create/destroy the
-infrastructure and redeploy many times.
-
+## Install dependencies
 
 - [Install terraform](https://developer.hashicorp.com/terraform/install) locally.
-- [Install aws-cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) locally.
+- [Install aws-cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) locally (only needed if you're using AWS)
 - [Install ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html) locally.
 
-Note: you can install all of these with conda, e.g.
+You can install them in to a conda env with:
 
 ```bash
 conda create -p ./env -c conda-forge terraform awscli ansible
 conda activate ./env
 ```
 
-- Create a keypair in `~/.ssh/aws` (e.g., `ssh-keygen -f ~/.ssh/aws`). This will
-  be configured to be the key to log in to any new instances.
+## Hetzner
 
-- Run `terraform init`. The primary thing this does is set up the AWS provider.
+This is a combination of manual steps in the console and automated setup.
+Creating a project with API keys needs to be manual because it's using the
+Hetzner console for initial authentication.
 
-- Run `aws configure` to get a default region.
+Creating a volume manually ensures we don't inadvertently delete it with
+`terraform destroy`. However, with Hetzner we can only create a volume if it is
+attached to a server so we need to make sure the server is created first.
 
-- In the AWS Console, manually create an EBS volume (or tag an existing one)
-  with the tag `Name` and the value `devboxdata`, which will be mounted at
-  `/data` on a new instance. (Edit `terraform.tfvars` if you want a different
-  name). EC2 > Elastic Block Store > Volumes > Create volume > make sure to add
-  tag with key `Name` and value `devboxdata`. Creating this persistent volume
-  through the AWS Console keeps it away from terraform to reduce the risk of
-  `terraform destroy` affecting it.
+### Initial setup
 
-- Review and edit `terraform.tfvars`.
+1. Manually create a new Hetzner project on https://console.hetzner.com/projects.
+2. In the new project's dashboard, create a new read/write API token (Security
+   -> API -> API tokens). Store it in `TF_VAR_hetzner_token` environment
+   variable. This API key is scoped to the project, so whatever you create will
+   be in this project.
+3. Decide on an SSH key to use to connect to the new host, creating one if
+   needed. Store this in the `TF_VAR_hcloud_ssh_key_file` environment variable.
 
+So you should have these env vars set:
 
-## Infrastructure provisioning
-
-Run the following:
-
-```bash
-terraform apply
-```
-If all looks good, answer "yes". Provisioning takes 1-2 mins.
-
-It will do the following:
-
-- Creates a VPC with public subnet, internet gateway, and route table for internet access
-- Allows SSH access (port 22) from anywhere
-- Uploads `~/.ssh/aws.pub` public key to AWS for instance access
-- Creates Ubuntu server using the latest HVM SSD AMD64 image, with auto-mounting script for the persistent volume
-- Attaches existing `devboxdata` EBS volume to `/data`
-- Creates `hosts` file with the public IP for use with Ansible (below) and keep
-  track of instance ID in `.instance_id` for start/stop scripts
-- Creates a lambda function that will run at the scheduled rate (default: every
-  6 hrs) until you do `terraform destroy`, and send you an email reminding you
-  the instance is still up. Technially, this sets up an SNS topic, an IAM role,
-  a Python script in a zip file that is uploaded to be executed as a Lambda,
-  a CloudWatch event for checking the instance, and an EventBridge rule for
-  scheduling.
+| env var                    | description                                       |
+|----------------------------|---------------------------------------------------|
+| TF_VAR_hcloud_ssh_key_file | existing private key file, e.g., `~/.ssh/hetzner` |
+| TF_VAR_hetzner_token       | API token for project                             |
 
 
-## About notifications
+### Infrastructure creation
+
+1. Edit `hetzner/terraform.tfvars`, following the comments in that file. This
+   includes location and server type.
+1. In the `hetzner` dir, run `terraform init`. This will make sure you have the
+   hcloud provider installed for terraform.
+3. In the `hetzner` dir, run `terraform apply`. This will show you what will be
+   created. Type "yes" if it all looks good. This will:
+   - Create a server of the type and location configured, using configured SSH key to log in
+   - if a volume with the label `name=devboxdata` exists, mount it -- otherwise don't mount anything yet.
+   - create a firewall allowing SSH from anywhere
+   - Create a local `hosts` file with the public IP for use with Ansible (below)
+4. In the project's dashboard, verify that a new server has been created.
+5. Either select an existing volume to use (or create a new volume) and attach
+   it to this new server. Make sure you select "Automatic" for mount options.
+   Filesystem should be EXT4. Add a label `name=devboxdata`.
+
+### Configuration
+
+In the `hetzner` dir, run `./run-playbook.sh`. It will ask if you want to
+connect to the host, type `yes`. This will do many things (see "Details of
+ansible configuration" below) but the Hetzner-specific pieces are the
+following, which makes the server look similar to an AWS instance:
+
+- Create `ubuntu` user with sudo privileges
+- Ensure the volume you created is persistently mounted at `/data`
+
+### Usage
+
+Run `./connect` to connect to the server.
+
+### Deletion
+
+Run `terraform destroy` to delete the server.
+
+- If you really want to delete the volume, do so in the console.
+
+- If you really want to delete the project, do so in the console.
+
+### Re-using
+
+Next time you want to spin up a server:
+
+1. `terraform apply` (this will automatically detect and auto-mount an existing volume with the `name=devboxdata` label)
+2. `./run-playbook.sh`
+3. `./connect`
+4. `terraform destroy` when done
+
+## AWS
+
+
+### Initial setup
+
+1. Set environment variables for AWS, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+1. Run `aws configure` to get a default region set up. This only has to be done once.
+3. In the AWS Console, manually create an EBS volume (or tag an existing one)
+   with the tag `Name` and the value `devboxdata`, which will be mounted at
+   `/data` on a new instance. (Edit `terraform.tfvars` if you want a different
+   name).
+    - EC2 > Elastic Block Store > Volumes > Create volume > make sure to add
+      tag with key `Name` and value `devboxdata`.
+    - Creating this persistent volume through the AWS Console keeps it away
+      from terraform to reduce the risk of `terraform destroy` affecting it.
+4. Choose an email to use for notifications, and store this in the
+   `TF_VAR_NOTIFICATION_EMAIL` env var.
+5. Choose or create a private key file to use, and set as the `TF_VAR_EC2_LOGIN_KEY` env var.
+
+So you should have the following environment variables set:
+
+| env var                   | description                                                                                       |
+|---------------------------|---------------------------------------------------------------------------------------------------|
+| TF_VAR_EC2_LOGIN_KEY      | .pem file (if instance was created in console), or existing private key file (if using terraform) |
+| TF_VAR_NOTIFICATION_EMAIL | email for notifications on instance                                                               |
+| AWS_ACCESS_KEY_ID         | From AWS console                                                                                  |
+| AWS_SECRET_ACCESS_KEY     | From AWS console                                                                                  |
+
+
+
+### Infrastructure creation
+
+1. Edit `aws/terraform.tfvars`, following the comments in that file.
+2. In the `aws` directory, run `terraform init`
+3. In the `aws` directory, run `terraform apply`. Type `yes` if all looks good. This will:
+    - Create a VPC with public subnet, internet gateway, and route table for
+      internet access
+    - Allow SSH access (port 22) from anywhere
+    - Upload `~/.ssh/aws.pub` public key to AWS for instance access
+    - Create an Ubuntu server using the latest HVM SSD AMD64 image, with
+      auto-mounting script for the persistent volume
+    - Attach existing `devboxdata` EBS volume to `/data` on the server
+    - Create a local `hosts` file with the public IP for use with Ansible (below) and keep
+      track of instance ID in `.instance_id` for start/stop scripts
+    - Create a lambda function that will run at the scheduled rate (default: every
+      6 hrs) until you do `terraform destroy`, and send you an email reminding you
+      the instance is still up. Technially, this sets up an SNS topic, an IAM role,
+      a Python script in a zip file that is uploaded to be executed as a Lambda,
+      a CloudWatch event for checking the instance, and an EventBridge rule for
+      scheduling.
+4. Check the email configured above, and click the link to subscribe to alerts.
+
+<details>
+<summary>About notifications</summary>
 
 Upon successful `terraform apply`, you will get an email confirming the
 subscription to this notification. You'll need to click the link to get any
@@ -112,8 +175,6 @@ means that Lambda will be running every N hours (every 6 hrs by default). This
 is inexpensive ($1 a month if running continously every 6 hrs for a month), but
 be aware.
 
-<details>
-<summary>Click to expand info on testing notifications</summary>
 For testing the notifications, you can *temporarily* set the rate to `rate(1
 minute)` in `terraform.tfvars`, re-apply, and check the logs with:
 
@@ -131,131 +192,66 @@ Note: I looked into SMS messages instead of email, but that ends up being
 overly cumbersome and expensive (and requires getting approval from AWS and an
 originator number)...so email it is.
 
-## Host creation (manual)
-
-<details>
-<summary>Click to expand manual host creation instructions</summary>
-
-If you don't want to use terraform, start an instance manually:
-
-- In AWS Console, start a new AWS instance running Ubuntu 24.04 LTS. Make sure to mount `devbox`.
-- Edit `hosts` file with public IP listed in AWS Console, to look like this:
-
-```
-[ec2]
-<IP address here>
-```
-
-When creating the instance, ensure `$TF_VAR_EC2_LOGIN_KEY` is set to the .pem
-file you use, because the file indicated by that env var is used by
-`./connect`.
-
 </details>
 
-## Connecting
+### Configuration
 
-Connect to the instance with:
+In the `aws` dir, run `./run-playbook.sh`. It will ask if you want to connect
+to the host, type `yes`. This will do many things (see "Details of ansible configuration" below).
 
-```bash
-./connect
-```
+### Usage
 
-This reads the `hosts` file, which is populated by terraform or `./start` with
-the IP, or was manually updated if using AWS Console instead of terraform.
+Run `./connect` to connect to the server.
 
-It expects the env var `$TF_VAR_EC2_LOGIN_KEY` to exist -- this is `~/.ssh/aws`
-by default as described above.
+Run `./stop` to stop the server. You will not pay for compute, but you will
+still pay for the storage of the image -- but this is a tiny fractio of the
+compute cost.
 
-You will need to say "yes" to connecting to this host. Once you confirm you can
-successfully connect, exit the host and then continue on to running the Ansible
-setup locally.
+Run `./start` to start the server so you can `./connect` again. This will
+repopulate the `.instance_id` and `hosts` files with instance ID and IP address
+respectively.
 
-## Ansible setup
+### Deletion
 
-Run the following:
+Run `terraform destroy` to terminate the server, and delete the VPC, Lambda
+function, and CloudWatch event.
 
-```bash
-./run-playbook.sh
-```
+If you really want to delete the volume, do so in the AWS Console.
 
-This takes 2-3 mins.
+### Re-using
 
-This does the following:
+If you have run `terraform destroy` and want to get set up again:
 
-- Installs conda to `/data/miniforge`
-- Sets up bioconda channel
-- Installs various tools in
-  [daler/dotfiles](https://github.com/daler/dotfiles):  `fd`, `rg`, `vd`,
-  `fzf`, `npm`, `nvim`. Uses a [custom ansible
-  module](library/dotfile_facts.py) to provide facts about dotfiles
-  installation on the remote host.
-- Installs LSPs and plugins for `nvim`
-- Installs various tools from Ubuntu repository (docker, podman, htop, tmux, and more -- see `playbook.yaml` for the full set)
-- Docker setup (add ubuntu user to docker group)
-- Match `~/.gitconfig` username and email with what is found locally
-- Add support for [GitHub SSH-over-HTTPS](https://docs.github.com/en/authentication/troubleshooting-ssh/using-ssh-over-the-https-port)
-- Color bash prompt (so it's clear you're on a different host)
-- Enable SSH key forwarding so you don't have to copy key files over to the
-  host
+1. `terraform apply` (this will automatically detect and auto-mount an existing volume with the `name=devboxdata` label)
+2. `./run-playbook.sh`
+3. `./connect`
+4. `terraform destroy` when done
 
-Now you should be able to run:
+## Details of ansible configuration
 
-```bash
-./connect
-```
+The ansible playbook is split into these pieces:
 
-and the various tools (`rg`, `fd`, `conda`, `nvim`, etc) should be available.
+- `playbook.yaml`, top-level playbook that refers to others, including:
+- `hetzner-root-setup.yaml` runs only for Hetzner; it:
+  - uses the root user to create an `ubuntu` user to match that of an AWS instance
+  - detects and mounts volume to `/data` 
+- `common-system.yaml`, which:
+  - Installs docker, podman, htop, tmux, build tools, and more
+  - Adds the ubuntu user to docker group
+  - Allows agent forwarding for SSH
+- `common-dotfiles.yaml`, which:
+  - Uses [daler/dotfiles](https://github.com/daler/dotfiles)
+  - Uses a [custom ansible module](library/dotfile_facts.py) to provide facts about dotfiles installation
+  - Installs conda to `/data/miniforge`
+  - Sets up bioconda channel
+  - Installs tools like `fd`, `rg`, `vd`, `fzf`, `npm`, `nvim`
+  - Installs LSPs and plugins for `nvim`
+  - Docker setup (add ubuntu user to docker group)
+  - Match `~/.gitconfig` username and email with what is found locally
+  - Add support for [GitHub SSH-over-HTTPS](https://docs.github.com/en/authentication/troubleshooting-ssh/using-ssh-over-the-https-port)
+  - Color bash prompt (so it's clear you're on a different host)
+  - Enable SSH key forwarding
 
-
-## Stopping and (re)starting the instance
-
-Stopping an instance means you don't pay for the compute any more. You do pay
-for the storage (like the root volume) but this is a tiny cost compared to the
-cost of compute.
-
-Either use the AWS Console, or if you used terraform (and therefore you have an
-`.instance_id` file automatically created with the instance ID), then use:
-
-```bash
-# stops instance and waits until it's stopped before exiting
-./stop
-```
-
-and
-
-```bash
-# starts instance, waits until started, and updates./hosts file with new IP
-./start
-```
-
-These scripts use the contents of `.instance_id`, which are created by
-terraform. They will wait until the instance is started/stopped before exiting.
-They can be run multiple times; e.g. you can keep running `./start`
-until it reports "running". 
-
-## Copying files
-
-If you need to copy files from the remote instance to your local machine, you can use:
-
-```bash
-./copy-to-local <remote-file-path>
-```
-
-which will copy to the current directory.
-
-## Destroy
-
-To terminate the instance (and remove VPC and subnet), run:
-
-```bash
-terraform destroy
-```
-
-Note that this will NOT delete the persistent volume you set up previously (and
-which was attached to `/data` on the instance), but it **WILL delete everything
-in the root partition**. So upon starting a new instance, you'll need to re-run
-`./run-playbook` again.
-
-Recall that the stopped instance does not accumlate *running* charges, but it
-does accumlate *storage* charges. So the decision is, "do I want to destroy (and
-pay the ~5 mins setup time later) or keep it stopped and pay for instance storage?".
+The `aws/run-playbook.sh` and `hetzner/run-playbook.sh` scripts call the main
+ansbile playbook to restrict hosts according to the provider (see those scripts
+for details).

@@ -74,7 +74,7 @@ def run_module():
         "conda": exists("conda") or pathexists("/data/miniforge/bin"),
         "fd": exists("fd") and not installed_but_needs_link("/data/miniforge/envs/fd/bin/fd", "~/opt/bin/fd"),
         "fd_needs_link": installed_but_needs_link("/data/miniforge/envs/fd/bin/fd", "~/opt/bin/fd"),
-        "vd_needs_link": installed_but_needs_link("/data/miniforge/envs/visidata/bin/fd", "~/opt/bin/vd"),
+        "vd_needs_link": installed_but_needs_link("/data/miniforge/envs/visidata/bin/vd", "~/opt/bin/vd"),
         "npm_needs_path": installed_but_not_on_path("/data/miniforge/envs/npm/bin", "npm"),
         "conda_needs_path": installed_but_not_on_path("/data/miniforge/condabin", "conda"),
         "nvim": exists("nvim"),

@@ -1,0 +1,100 @@
+---
+# Hetzner-specific initial setup tasks (run as root) These tasks handle volume
+# mounting and ubuntu user creation. The end result matches the default
+# configuration of AWS instances, so we can use a single set of tasks that are
+# common between both providers.
+
+# ===== Create ubuntu user =====
+# This makes the ubuntu user use the same keys as those configured for root
+- name: Read root's authorized_keys
+  ansible.builtin.slurp:
+    src: /root/.ssh/authorized_keys
+  register: root_ssh_keys
+
+- name: Create ubuntu user
+  ansible.builtin.user:
+    name: ubuntu
+    shell: /bin/bash
+    create_home: yes
+    groups: sudo
+    append: yes
+
+- name: Add root's SSH keys to ubuntu user
+  ansible.posix.authorized_key:
+    user: ubuntu
+    key: "{{ root_ssh_keys['content'] | b64decode }}"
+    state: present
+
+- name: Enable passwordless sudo for ubuntu user
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/ubuntu
+    line: 'ubuntu ALL=(ALL) NOPASSWD:ALL'
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+# ===== VOLUME MANAGEMENT =====
+# This assumes that a volume exists in the same Hetzner location as the server
+# and is configured to auto-mount via the Hetzner console (or via
+# terraform).
+#
+# These tasks inspect existing mounts, assumes the one that is larger than 9 GB
+# and not mounted at `/` is the one to use. If it's not already mounted at
+# /data, then unmount it, mount it to /data, and add an entry in /etc/fstab
+# for persistence.
+- name: Gather mount facts
+  ansible.builtin.setup:
+    gather_subset:
+      - mounts
+
+- name: Find Hetzner volume mount (non-root, large volume)
+  set_fact:
+    volume_mount: "{{ ansible_mounts | rejectattr('mount', 'equalto', '/') | selectattr('size_total', 'gt', 9000000000) | first }}"
+  when:
+    - ansible_mounts | rejectattr('mount', 'equalto', '/') | selectattr('size_total', 'gt', 9000000000) | list | length > 0
+
+- name: Display current volume info
+  debug:
+    msg:
+      - "Current mount: {{ volume_mount.mount }}"
+      - "Device: {{ volume_mount.device }}"
+      - "Filesystem: {{ volume_mount.fstype }}"
+  when:
+    - volume_mount is defined
+
+- name: Unmount from current location if not /data
+  ansible.posix.mount:
+    path: "{{ volume_mount.mount }}"
+    state: unmounted
+  when:
+    - volume_mount is defined
+    - volume_mount.mount != '/data'
+
+- name: Create /data directory
+  ansible.builtin.file:
+    path: /data
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+  when:
+    - volume_mount is defined
+
+- name: Mount volume at /data
+  ansible.posix.mount:
+    path: /data
+    src: "{{ volume_mount.device }}"
+    fstype: "{{ volume_mount.fstype }}"
+    state: mounted
+  when:
+    - volume_mount is defined
+    - volume_mount.mount != '/data'
+
+- name: Ensure mount persists on reboot
+  ansible.posix.mount:
+    path: /data
+    src: "{{ volume_mount.device }}"
+    fstype: "{{ volume_mount.fstype }}"
+    state: present
+  when:
+    - volume_mount is defined

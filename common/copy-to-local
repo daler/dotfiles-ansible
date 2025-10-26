@@ -1,0 +1,21 @@
+#!/bin/bash
+
+FILE_PATH="$1"
+
+[ -z "$TF_VAR_EC2_LOGIN_KEY" ] && echo 'Missing $TF_VAR_EC2_LOGIN_KEY' && exit 1
+
+if [ -z "$SSH_AUTH_SOCK" ] || ! ssh-add -l &> /dev/null; then
+    echo "SSH agent not running"
+    exit 1
+fi
+
+# Extract first IP address from the provider-specific hosts file
+IP=$(awk '/^[0-9]/{print $1; exit}' "hosts")
+
+if [ -z "$IP" ]; then
+    echo "No IP found in hosts."
+    exit 1
+fi
+
+set -x
+scp -i $TF_VAR_EC2_LOGIN_KEY ubuntu@$IP:"$FILE_PATH" .
