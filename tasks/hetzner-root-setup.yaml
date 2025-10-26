@@ -98,3 +98,11 @@
     state: present
   when:
     - volume_mount is defined
+
+- name: Ensure directory permissions are correct
+  ansible.builtin.file:
+    path: /data
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'

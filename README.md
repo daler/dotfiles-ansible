@@ -63,34 +63,45 @@ So you should have these env vars set:
 
 ### Infrastructure creation
 
-1. Edit `hetzner/terraform.tfvars`, following the comments in that file. This
+Change to the `hetzner` directory.
+
+1. Edit `terraform.tfvars`, following the comments in that file. This
    includes location and server type.
-1. In the `hetzner` dir, run `terraform init`. This will make sure you have the
-   hcloud provider installed for terraform.
-3. In the `hetzner` dir, run `terraform apply`. This will show you what will be
-   created. Type "yes" if it all looks good. This will:
+1. Run `terraform init`. This will make sure you have the hcloud provider
+   installed for terraform.
+3. Run `terraform apply`. This will show you what will be created. Type "yes"
+   if it all looks good. This will:
    - Create a server of the type and location configured, using configured SSH key to log in
    - if a volume with the label `name=devboxdata` exists, mount it -- otherwise don't mount anything yet.
    - create a firewall allowing SSH from anywhere
    - Create a local `hosts` file with the public IP for use with Ansible (below)
 4. In the project's dashboard, verify that a new server has been created.
-5. Either select an existing volume to use (or create a new volume) and attach
-   it to this new server. Make sure you select "Automatic" for mount options.
-   Filesystem should be EXT4. Add a label `name=devboxdata`.
+5. If an existing volume in the location has the label `name=devboxdata` then
+   this will be mounted automatically. Otherwise, create a new volume in the
+   Hetzner Console and attach it to this new server.
+    - Make sure you select "Automatic" for mount options.
+    - Filesystem should be EXT4
+    - Add a label `name=devboxdata`
 
 ### Configuration
 
-In the `hetzner` dir, run `./run-playbook.sh`. It will ask if you want to
-connect to the host, type `yes`. This will do many things (see "Details of
-ansible configuration" below) but the Hetzner-specific pieces are the
-following, which makes the server look similar to an AWS instance:
+Run `./run-playbook.sh`. It will ask if you want to connect to the host, type
+`yes`. This will do many things (see "Details of ansible configuration" below)
+but the Hetzner-specific pieces are the following, which makes the server look
+similar to an AWS instance:
 
 - Create `ubuntu` user with sudo privileges
 - Ensure the volume you created is persistently mounted at `/data`
 
+The other tasks run in the playbook are common to Hetzner and AWS and are
+described below.
+
 ### Usage
 
 Run `./connect` to connect to the server.
+
+This uses SSH forwarding so your local keys can be used on the server (e.g., to
+push to GitHub).
 
 ### Deletion
 
@@ -114,7 +125,8 @@ Next time you want to spin up a server:
 
 ### Initial setup
 
-1. Set environment variables for AWS, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+1. Set environment variables for AWS, `AWS_ACCESS_KEY_ID` and
+   `AWS_SECRET_ACCESS_KEY`, which you can get from the AWS Console.
 1. Run `aws configure` to get a default region set up. This only has to be done once.
 3. In the AWS Console, manually create an EBS volume (or tag an existing one)
    with the tag `Name` and the value `devboxdata`, which will be mounted at
@@ -141,9 +153,11 @@ So you should have the following environment variables set:
 
 ### Infrastructure creation
 
-1. Edit `aws/terraform.tfvars`, following the comments in that file.
-2. In the `aws` directory, run `terraform init`
-3. In the `aws` directory, run `terraform apply`. Type `yes` if all looks good. This will:
+Change to the `aws` directory.
+
+1. Edit `terraform.tfvars`, following the comments in that file.
+2. Run `terraform init` to make sure the AWS terraform provider is installed.
+3. Run `terraform apply`. Type `yes` if all looks good. This will:
     - Create a VPC with public subnet, internet gateway, and route table for
       internet access
     - Allow SSH access (port 22) from anywhere
@@ -196,12 +210,13 @@ originator number)...so email it is.
 
 ### Configuration
 
-In the `aws` dir, run `./run-playbook.sh`. It will ask if you want to connect
-to the host, type `yes`. This will do many things (see "Details of ansible configuration" below).
+Run `./run-playbook.sh`. It will ask if you want to connect to the host, type
+`yes`. This will do many things; see "Details of ansible configuration" below.
 
 ### Usage
 
-Run `./connect` to connect to the server.
+Run `./connect` to connect to the server. This uses SSH forwarding so your
+local keys can be used on the server (e.g., to push to GitHub).
 
 Run `./stop` to stop the server. You will not pay for compute, but you will
 still pay for the storage of the image -- but this is a tiny fractio of the
@@ -239,6 +254,7 @@ The ansible playbook is split into these pieces:
   - Installs docker, podman, htop, tmux, build tools, and more
   - Adds the ubuntu user to docker group
   - Allows agent forwarding for SSH
+  - Does an `apt upgrade` to ensure things are up-to-date
 - `common-dotfiles.yaml`, which:
   - Uses [daler/dotfiles](https://github.com/daler/dotfiles)
   - Uses a [custom ansible module](library/dotfile_facts.py) to provide facts about dotfiles installation
@@ -255,3 +271,7 @@ The ansible playbook is split into these pieces:
 The `aws/run-playbook.sh` and `hetzner/run-playbook.sh` scripts call the main
 ansbile playbook to restrict hosts according to the provider (see those scripts
 for details).
+
+Sometimes there is a failure or error. It's fine to run `./run-playbook.sh`
+multiple times, if a configuration is already completed it will skip and move
+on to the next.
