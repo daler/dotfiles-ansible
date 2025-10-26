@@ -1,29 +1,5 @@
----
-# =============================================================================
-# Ansible Playbook for Server Setup
-# =============================================================================
-# This playbook configures servers on AWS (EC2) or Hetzner
-#
-# Usage:
-#   ./run-playbook.sh aws      # For AWS/EC2 instances
-#   ./run-playbook.sh hetzner  # For Hetzner instances
-#
-# The playbook is organized into modular task files for maintainability:
-#   - tasks/hetzner-root-setup.yaml  : Hetzner-specific volume & user setup
-#   - tasks/common-packages.yaml     : System packages (both providers)
-#   - tasks/common-dotfiles.yaml     : Dotfiles and git configuration
-#   - tasks/common-tools.yaml        : Development tools (conda, nvim, etc.)
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Play 1: Hetzner Initial Setup (root user)
-# -----------------------------------------------------------------------------
-# This play only runs for Hetzner instances and must run as root.
-# It handles:
-#   - Mounting the persistent volume at /data
-#   - Creating the ubuntu user with sudo access
-#   - Copying SSH keys from root to ubuntu user
-# -----------------------------------------------------------------------------
+# Hetzner only, to make ubuntu user and mount volume in the correct location so
+# it matches an equivalent AWS host.
 - name: Initial setup as root (Hetzner only)
   hosts: hetzner
   remote_user: root
@@ -32,20 +8,15 @@
       ansible.builtin.include_tasks:
         file: tasks/hetzner-root-setup.yaml
 
-# -----------------------------------------------------------------------------
-# Play 2: Main Setup (ubuntu user)
-# -----------------------------------------------------------------------------
-# This play runs for all hosts (both AWS and Hetzner) as the ubuntu user.
-# -----------------------------------------------------------------------------
-- name: Main setup tasks
+- name: Common setup tasks
   hosts: all
   remote_user: ubuntu
   environment:
     DOTFILES_FORCE: "true"
   tasks:
-    - name: Include common package installation tasks
+    - name: Include common system configuration tasks
       ansible.builtin.include_tasks:
-        file: tasks/common-packages.yaml
+        file: tasks/common-system.yaml
 
     - name: Include common dotfiles setup tasks
       ansible.builtin.include_tasks:

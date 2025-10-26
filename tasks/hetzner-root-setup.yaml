@@ -1,8 +1,47 @@
 ---
-# Hetzner-specific initial setup tasks (run as root)
-# These tasks handle volume mounting and ubuntu user creation
+# Hetzner-specific initial setup tasks (run as root) These tasks handle volume
+# mounting and ubuntu user creation. The end result matches the default
+# configuration of AWS instances, so we can use a single set of tasks that are
+# common between both providers.
+
+# ===== Create ubuntu user =====
+# This makes the ubuntu user use the same keys as those configured for root
+- name: Read root's authorized_keys
+  ansible.builtin.slurp:
+    src: /root/.ssh/authorized_keys
+  register: root_ssh_keys
+
+- name: Create ubuntu user
+  ansible.builtin.user:
+    name: ubuntu
+    shell: /bin/bash
+    create_home: yes
+    groups: sudo
+    append: yes
+
+- name: Add root's SSH keys to ubuntu user
+  ansible.posix.authorized_key:
+    user: ubuntu
+    key: "{{ root_ssh_keys['content'] | b64decode }}"
+    state: present
+
+- name: Enable passwordless sudo for ubuntu user
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/ubuntu
+    line: 'ubuntu ALL=(ALL) NOPASSWD:ALL'
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
 
 # ===== VOLUME MANAGEMENT =====
+# This assumes that a volume exists in the same Hetzner location as the server
+# and is configured to auto-mount via the Hetzner console (or via
+# terraform).
+#
+# These tasks inspect existing mounts, assumes the one that is larger than 9 GB
+# and not mounted at `/` is the one to use. If it's not already mounted at
+# /data, then unmount it, mount it to /data, and add an entry in /etc/fstab
+# for persistence.
 - name: Gather mount facts
   ansible.builtin.setup:
     gather_subset:
@@ -10,9 +49,9 @@
 
 - name: Find Hetzner volume mount (non-root, large volume)
   set_fact:
-    volume_mount: "{{ ansible_mounts | rejectattr('mount', 'equalto', '/') | selectattr('size_total', 'gt', 10000000000) | first }}"
+    volume_mount: "{{ ansible_mounts | rejectattr('mount', 'equalto', '/') | selectattr('size_total', 'gt', 9000000000) | first }}"
   when:
-    - ansible_mounts | rejectattr('mount', 'equalto', '/') | selectattr('size_total', 'gt', 10000000000) | list | length > 0
+    - ansible_mounts | rejectattr('mount', 'equalto', '/') | selectattr('size_total', 'gt', 9000000000) | list | length > 0
 
 - name: Display current volume info
   debug:
@@ -59,31 +98,3 @@
     state: present
   when:
     - volume_mount is defined
-
-# ===== USER CREATION =====
-- name: Read root's authorized_keys
-  ansible.builtin.slurp:
-    src: /root/.ssh/authorized_keys
-  register: root_ssh_keys
-
-- name: Create ubuntu user
-  ansible.builtin.user:
-    name: ubuntu
-    shell: /bin/bash
-    create_home: yes
-    groups: sudo
-    append: yes
-
-- name: Add root's SSH keys to ubuntu user
-  ansible.posix.authorized_key:
-    user: ubuntu
-    key: "{{ root_ssh_keys['content'] | b64decode }}"
-    state: present
-
-- name: Enable passwordless sudo for ubuntu user
-  ansible.builtin.lineinfile:
-    path: /etc/sudoers.d/ubuntu
-    line: 'ubuntu ALL=(ALL) NOPASSWD:ALL'
-    create: yes
-    mode: '0440'
-    validate: 'visudo -cf %s'
