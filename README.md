@@ -2,22 +2,23 @@
 
 ## Overview
 
-Start and configure a development box as seamlessly and as quickly as possible.
+The goal of this repo is to start and configure a development box as seamlessly
+and as quickly as possible.
 
-This uses terraform to manage infrastructure (server and associated things like
-firewalls) and Ansible to manage configuration of the server once it's created.
+This uses *terraform* to manage infrastructure (server and associated things like
+firewalls) and *ansible* to manage configuration of the server once it's created.
 
-There are two options for providers here, AWS and Hetzner.
+There are two options for providers here, **AWS** and **Hetzner**.
 
-AWS lets you start/stop instances so that you don't pay for compute on stopped
+**AWS** lets you start/stop instances so that you don't pay for compute on stopped
 instances. You do pay for storage of the image, but that's a tiny fraction of
 the compute cost. This is a good option if you plan to have long periods of
 inactivity but want to keep the instance available (it usually takes less than
 a minute to start a stopped instance).
 
-Hetzner servers are about 10x cheaper than AWS for a month of compute. You
-cannot start/stop them, you need to create/destroy the server. This is a good
-option if you know you will be using it fairly frequently.
+**Hetzner** servers are about 10x cheaper than AWS for a month of compute. But
+you cannot start/stop them, you need to create/destroy the server completely.
+This is a good option if you know you will be using it fairly frequently.
 
 ## Install dependencies
 

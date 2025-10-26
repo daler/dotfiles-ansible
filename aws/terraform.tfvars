@@ -1,6 +1,9 @@
 region = "us-east-1"
 ssh_key_file = "~/.ssh/aws"
-instance_type = "m7i.xlarge"   # NOTE: main.tf expects at least nvme storage
+
+# About $0.20 an hour on demand.
+# NOTE: main.tf expects at least nvme storage support.
+instance_type = "m7i.xlarge"
 
 # Volume expected to have been created already, and assigned tag Name=$volume_name (e.g., Name=devboxdata)
 volume_name = "devboxdata"
