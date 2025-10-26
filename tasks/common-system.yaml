@@ -1,9 +1,5 @@
 ---
 # Common package installation tasks
-- name: apt upgrade
-  become: true
-  ansible.builtin.apt:
-    upgrade: true
 
 - name: apt installs
   become: true
@@ -25,6 +21,11 @@
       - tree
       - unzip
       - wget
+
+- name: apt upgrade
+  become: true
+  ansible.builtin.apt:
+    upgrade: true
 
 - name: Create "docker" group
   become: true
